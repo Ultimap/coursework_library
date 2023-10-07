@@ -1,7 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, ForeignKey, TIMESTAMP, Boolean
-from sqlalchemy.dialects.postgresql import UUID
-import uuid
 Base = declarative_base()
 
 
@@ -48,7 +46,7 @@ class Role(Base):
 
 class User(Base):
     __tablename__ = "Users"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String, unique=True)
     role = Column(ForeignKey(Role.id))
     age = Column(Integer, nullable=False)

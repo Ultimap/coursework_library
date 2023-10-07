@@ -3,9 +3,10 @@ import jwt
 from fastapi import Depends, HTTPException
 from datetime import datetime, timedelta
 from sqlalchemy import select
-from app.models.database import async_session
+from app.models.database import db_session
 from app.models.models import User
 from app.settings import ALGORITHM, SECRET_KEY, oauth2scheme
+
 EXPIRATION_TIME = timedelta(days=1)
 
 
@@ -20,8 +21,8 @@ async def verify_password(password: str, hash_password: str) -> bool:
 
 
 async def get_user_by_username(username: str) -> User:
-    async with async_session() as session:
-        user = await session.execute(select(User).where(User.username == username))
+    with db_session() as session:
+        user = session.execute(select(User).where(User.username == username))
         return user.scalar_one_or_none()
 
 

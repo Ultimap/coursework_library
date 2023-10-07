@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Form, UploadFile, File, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import select, update, func
 from datetime import date
 from app.models.database import get_session
@@ -22,7 +22,7 @@ async def add_book(
         author: int = Form(...),
         age_restriction: int = Form(...),
         release_date: date = Form(...),
-        db: AsyncSession = Depends(get_session),
+        db: Session = Depends(get_session),
         user: User = Depends(get_current_user)
         ):
     if user.role == 1:
@@ -31,7 +31,7 @@ async def add_book(
                             count=count, style=style, author=author,
                             age_restriction=age_restriction, release_date=release_date)
             db.add(new_book)
-            await db.commit()
+            db.commit()
             await add_img(img)
         except:
             raise HTTPException(status_code=409)
@@ -42,14 +42,14 @@ async def add_book(
                 db.add(accounting)
             except:
                 ...
-        await db.commit()
+        db.commit()
         return {'message': 'Success'}
     raise HTTPException(status_code=403)
 
 
 @books.get('', status_code=200)
-async def get_books(db: AsyncSession = Depends(get_session)):
-    book = await db.execute(select(Book))
+async def get_books(db: Session = Depends(get_session)):
+    book = db.execute(select(Book))
     return book.scalars().all()
 
 
@@ -67,14 +67,14 @@ async def get_book(id: int):
 
 
 @books.delete('/{id}/delete', status_code=200)
-async def delete(id: int, db: AsyncSession = Depends(get_session), user: User = Depends(get_current_user)):
+async def delete(id: int, db: Session = Depends(get_session), user: User = Depends(get_current_user)):
     if user.role == 1:
         try:
             book = await get_book_by_id(id)
             if not book:
                 raise HTTPException(status_code=404, detail='book not found')
-            await db.delete(book)
-            await db.commit()
+            db.delete(book)
+            db.commit()
             return {'message': 'Success'}
         except:
             raise HTTPException(status_code=409)
@@ -82,36 +82,36 @@ async def delete(id: int, db: AsyncSession = Depends(get_session), user: User = 
 
 
 @books.put('/{id}/edit', status_code=200)
-async def edit(id: int, data: BookEdit, db: AsyncSession = Depends(get_session), user: User = Depends(get_current_user)):
+async def edit(id: int, data: BookEdit, db: Session = Depends(get_session), user: User = Depends(get_current_user)):
     if user.role == 1:
         book = await get_book_by_id(id)
         try:
             if not book:
                 raise HTTPException(status_code=404, detail='book not found')
             if data.name:
-                await db.execute(update(Book).values(name=data.name).where(Book.id == id))
+                db.execute(update(Book).values(name=data.name).where(Book.id == id))
             if data.style:
-                await db.execute(update(Book).values(style=data.style).where(Book.id == id))
+                db.execute(update(Book).values(style=data.style).where(Book.id == id))
             if data.author:
-                await db.execute(update(Book).values(author=data.author).where(Book.id == id))
+                db.execute(update(Book).values(author=data.author).where(Book.id == id))
             if data.count:
-                accounting_count = await db.execute(select(func.count()).where(Accounting.book == id))
+                accounting_count = db.execute(select(func.count()).where(Accounting.book == id))
                 count = accounting_count.scalar()
                 if count > data.count:
-                    excess_records = await db.execute(
+                    excess_records = db.execute(
                         select(Accounting).where(Accounting.book == id).order_by(Accounting.id.desc()).limit(count-data.count))
                     records_to_delete = excess_records.scalars().all()
                     try:
                         for record in records_to_delete:
-                            await db.delete(record)
-                            await db.commit()
+                            db.delete(record)
+                            db.commit()
                     except:
                         raise HTTPException(status_code=409, detail='сannot be edit')
                 else:
                     for x in range(data.count):
                         try:
                             unique_key = f'{book.id}+{x + 1}'
-                            accounting_in_data = await db.execute(
+                            accounting_in_data = db.execute(
                                 select(Accounting).where(Accounting.unique_key == unique_key))
                             if accounting_in_data.scalar_one_or_none() is not None:
                                 continue
@@ -119,15 +119,15 @@ async def edit(id: int, data: BookEdit, db: AsyncSession = Depends(get_session),
                             db.add(accounting)
                         except:
                             ...
-                        await db.commit()
-                await db.execute(update(Book).values(count=data.count).where(Book.id == id))
+                        db.commit()
+                db.execute(update(Book).values(count=data.count).where(Book.id == id))
             if data.description:
-                await db.execute(update(Book).values(description=data.description).where(Book.id == id))
+                db.execute(update(Book).values(description=data.description).where(Book.id == id))
             if data.age_restriction:
-                await db.execute(update(Book).values(age_restriction=data.age_restriction).where(Book.id == id))
+                db.execute(update(Book).values(age_restriction=data.age_restriction).where(Book.id == id))
             if data.release_date:
-                await db.execute(update(Book).values(release_date=data.release_date).where(Book.id == id))
-            await db.commit()
+                db.execute(update(Book).values(release_date=data.release_date).where(Book.id == id))
+            db.commit()
         except:
             raise HTTPException(status_code=409)
         return {'message': 'Success'}
@@ -135,14 +135,14 @@ async def edit(id: int, data: BookEdit, db: AsyncSession = Depends(get_session),
 
 
 @books.put('/{id}/edit/img', status_code=200)
-async def edit_img(id: int, img: UploadFile = File(...), db: AsyncSession = Depends(get_session), user: User = Depends(get_current_user)):
+async def edit_img(id: int, img: UploadFile = File(...), db: Session = Depends(get_session), user: User = Depends(get_current_user)):
     if user.role == 1:
         book = await get_book_by_id(id)
         if not book:
             raise HTTPException(status_code=404, detail='book not found')
         try:
-            await db.execute(update(Book).values(img=img.filename).where(Book.id == id))
-            await db.commit()
+            db.execute(update(Book).values(img=img.filename).where(Book.id == id))
+            db.commit()
             await add_img(img)
             return {'message': 'Success'}
         except:
